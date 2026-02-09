@@ -1,0 +1,31 @@
+name = "Vegetation"
+uuid = "b8531ea1-2e78-4866-9831-a39316ef1066"
+version = "0.1.0"
+authors = ["EarthSciML authors and contributors"]
+
+[deps]
+DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
+EarthSciMLBase = "e53f1632-a13c-4728-9402-0c66d48804b0"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+
+[compat]
+DocStringExtensions = "0.9"
+DynamicQuantities = "1"
+EarthSciMLBase = "0.24"
+ModelingToolkit = "10"
+NonlinearSolve = "4"
+OrdinaryDiffEqDefault = "1"
+SciMLBase = "2"
+TestItemRunner = "1"
+julia = "1.10"
+
+[extras]
+NonlinearSolve = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
+OrdinaryDiffEqDefault = "50262376-6c5a-4cf5-baba-aaf4f84d72d7"
+SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+TestItemRunner = "f8b46487-2199-4994-9208-9a1283c18c0a"
+
+[targets]
+test = ["Test", "TestItemRunner", "OrdinaryDiffEqDefault", "NonlinearSolve", "SciMLBase"]
