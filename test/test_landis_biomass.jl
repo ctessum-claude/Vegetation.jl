@@ -85,45 +85,112 @@ end
 end
 
 @testitem "LANDISBiomass: Eq. 4 - ANPP Growth Function Shape" setup = [LANDISSetup] tags = [:landis] begin
-    # Verify the growth function e * B_AP * exp(-B_AP) peaks at B_AP = 1 with value 1
-    @test exp(1) * 1.0 * exp(-1.0) ≈ 1.0 rtol = 1.0e-10
+    # Verify the growth function peaks at B_AP = 1 by running the actual model
+    sys = LANDISBiomass()
+    compiled = mtkcompile(sys)
 
-    # At B_AP = 0.5: e * 0.5 * exp(-0.5) ≈ 0.8244
-    @test exp(1) * 0.5 * exp(-0.5) ≈ 0.8244 rtol = 1.0e-3
+    # Set B = B_POT (so B_AP = 1, B_PM = 1) to test peak ANPP
+    # B_MAX = ANPP_MAX * 30 yr = 7.45 * 0.1 / yr_to_s * 30 * yr_to_s = 22.35 kg/m²
+    B_MAX_val = 7.45 * Mg_ha_to_kg_m2 / yr_to_s * 30.0 * yr_to_s
+    prob_peak = ODEProblem(
+        compiled,
+        Dict(compiled.B => B_MAX_val, compiled.D_wood => 0.0),
+        (0.0, 1.0)
+    )
+    sol_peak = solve(prob_peak)
+    # At B_AP = 1, B_PM = 1: ANPP_ACT should equal ANPP_MAX * e * 1 * exp(-1) * 1 = ANPP_MAX
+    ANPP_at_peak = sol_peak[compiled.ANPP_ACT][1]
+    ANPP_MAX_val = 7.45 * Mg_ha_to_kg_m2 / yr_to_s
+    @test ANPP_at_peak ≈ ANPP_MAX_val rtol = 1.0e-4
+
+    # At lower B (B_AP < 1), ANPP should be less than at peak
+    prob_low = ODEProblem(
+        compiled,
+        Dict(compiled.B => 0.5 * B_MAX_val, compiled.D_wood => 0.0),
+        (0.0, 1.0)
+    )
+    sol_low = solve(prob_low)
+    ANPP_at_low = sol_low[compiled.ANPP_ACT][1]
+    @test ANPP_at_low < ANPP_at_peak
+    # e * 0.5 * exp(-0.5) ≈ 0.8244
+    @test ANPP_at_low / ANPP_MAX_val ≈ 0.8244 rtol = 0.01
 end
 
 @testitem "LANDISBiomass: Eq. 5 - Mortality Logistic Shape" setup = [LANDISSetup] tags = [:landis] begin
-    # Verify the mortality logistic with r/y0 exponent
-    r = 0.08; y0 = 0.01
+    # Verify the mortality logistic shape by running the actual model
+    sys = LANDISBiomass()
+    compiled = mtkcompile(sys)
 
-    # At B_AP = 0: M_frac = y0 = 0.01
-    M_0 = y0 / (y0 + (1 - y0) * exp(0))
-    @test M_0 ≈ y0 rtol = 1.0e-10
+    B_MAX_val = 7.45 * Mg_ha_to_kg_m2 / yr_to_s * 30.0 * yr_to_s
+    ANPP_MAX_val = 7.45 * Mg_ha_to_kg_m2 / yr_to_s
 
-    # At B_AP = 0.4: M_frac ≈ 0.199
-    M_04 = y0 / (y0 + (1 - y0) * exp(-r / y0 * 0.4))
-    @test M_04 ≈ 0.199 rtol = 0.01
+    # At B_AP ≈ 1.0 (B = B_MAX, B_PM = 1): M_BIO/ANPP_MAX ≈ 0.968
+    prob_full = ODEProblem(
+        compiled,
+        Dict(compiled.B => B_MAX_val, compiled.D_wood => 0.0),
+        (0.0, 1.0)
+    )
+    sol_full = solve(prob_full)
+    M_BIO_full = sol_full[compiled.M_BIO][1]
+    @test M_BIO_full / ANPP_MAX_val ≈ 0.968 rtol = 0.01
 
-    # At B_AP = 1.0: M_frac ≈ 0.968
-    M_10 = y0 / (y0 + (1 - y0) * exp(-r / y0 * 1.0))
-    @test M_10 ≈ 0.968 rtol = 0.01
+    # At B_AP ≈ 0.4 (B = 0.4 * B_MAX, B_PM = 1): M_BIO/ANPP_MAX ≈ 0.199
+    prob_mid = ODEProblem(
+        compiled,
+        Dict(compiled.B => 0.4 * B_MAX_val, compiled.D_wood => 0.0),
+        (0.0, 1.0)
+    )
+    sol_mid = solve(prob_mid)
+    M_BIO_mid = sol_mid[compiled.M_BIO][1]
+    @test M_BIO_mid / ANPP_MAX_val ≈ 0.199 rtol = 0.01
+
+    # At very low B_AP, M_BIO should approach y0 * ANPP_MAX * B_PM
+    prob_low = ODEProblem(
+        compiled,
+        Dict(compiled.B => 0.001 * B_MAX_val, compiled.D_wood => 0.0),
+        (0.0, 1.0)
+    )
+    sol_low = solve(prob_low)
+    M_BIO_low = sol_low[compiled.M_BIO][1]
+    @test M_BIO_low / ANPP_MAX_val ≈ 0.01 rtol = 0.1
 end
 
 @testitem "LANDISBiomass: Eq. 6 - Age-related Mortality Shape" setup = [LANDISSetup] tags = [:landis] begin
-    # Verify M_AGE = B * exp((age/max_age)*d) / exp(d)
-    d = 10.0
+    # Verify M_AGE shape by running the actual model at different ages
+    sys = LANDISBiomass()
+    compiled = mtkcompile(sys)
 
-    # At age = 0: fraction = exp(-d) ≈ 4.54e-5
-    @test exp(0) / exp(d) ≈ exp(-d) rtol = 1.0e-10
+    B_init = 10.0 * Mg_ha_to_kg_m2  # 10 Mg/ha
 
-    # At age = 0.5*max_age: fraction = exp(-d/2) ≈ 0.00674
-    @test exp(0.5 * d) / exp(d) ≈ exp(-d / 2) rtol = 1.0e-10
+    # At age = 0.5 * max_age (200 years): M_AGE fraction ≈ exp(-d/2) ≈ 0.00674
+    prob_half = ODEProblem(
+        compiled,
+        Dict(compiled.B => B_init, compiled.D_wood => 0.0,
+            compiled.age_init => 200.0 * yr_to_s),
+        (0.0, 1.0)
+    )
+    sol_half = solve(prob_half)
+    M_AGE_half = sol_half[compiled.M_AGE][1]
+    # M_AGE = B/yr * exp(0.5*d)/exp(d) = B/yr * exp(-d/2)
+    expected_half = B_init / yr_to_s * exp(-10.0 / 2)
+    @test M_AGE_half ≈ expected_half rtol = 1.0e-4
 
-    # At age = max_age: fraction = 1.0
-    @test exp(d) / exp(d) ≈ 1.0 rtol = 1.0e-10
+    # At age = 0.8 * max_age (320 years): fraction ≈ 0.135 (Fig. 3b)
+    prob_80 = ODEProblem(
+        compiled,
+        Dict(compiled.B => B_init, compiled.D_wood => 0.0,
+            compiled.age_init => 320.0 * yr_to_s),
+        (0.0, 1.0)
+    )
+    sol_80 = solve(prob_80)
+    M_AGE_80 = sol_80[compiled.M_AGE][1]
+    expected_80 = B_init / yr_to_s * exp(0.8 * 10.0) / exp(10.0)
+    @test M_AGE_80 ≈ expected_80 rtol = 1.0e-4
+    # Fraction should be ≈ 0.135
+    @test exp(0.8 * 10.0) / exp(10.0) ≈ 0.135 rtol = 0.01
 
-    # At age = 0.8*max_age: fraction ≈ 0.135 (Fig 3b)
-    @test exp(0.8 * d) / exp(d) ≈ 0.135 rtol = 0.01
+    # M_AGE should increase with age
+    @test M_AGE_80 > M_AGE_half
 end
 
 @testitem "LANDISBiomass: Single Species Growth (A. saccharum)" setup = [LANDISSetup] tags = [:landis] begin

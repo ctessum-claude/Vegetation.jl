@@ -60,6 +60,38 @@ DataFrame(
 eqs = equations(sys)
 ```
 
+### Table 1: Acronyms, Definitions, and Units
+
+The following table reproduces Table 1 from Scheller and Mladenoff (2004),
+showing acronyms, definitions, and units for the biomass model variables.
+
+```@example landis
+DataFrame(
+    :Acronym => [
+        "ANPP_MAX", "ANPP_ACT", "B", "B_AP",
+        "B_MAX", "B_POT", "B_PM", "D_wood",
+        "M_BIO", "M_AGE",
+    ],
+    :Definition => [
+        "Maximum ANPP for species",
+        "Actual ANPP for species, age cohort",
+        "Actual biomass for species, age cohort",
+        "Ratio of actual to maximum biomass for species, age cohort",
+        "Maximum possible biomass for species",
+        "Potential biomass — the limit to biomass based on growing space available",
+        "Ratio of potential to maximum biomass for species, age cohort",
+        "Dead biomass, including coarse woody debris (CWD) and snags",
+        "Mortality rate as a function of total stand biomass",
+        "Mortality rate as a function of species cohort age and maximum species longevity",
+    ],
+    Symbol("Units (paper)") => [
+        "Mg ha⁻¹ year⁻¹", "Mg ha⁻¹ year⁻¹", "Mg ha⁻¹", "dimensionless",
+        "Mg ha⁻¹", "Mg ha⁻¹", "dimensionless", "Mg ha⁻¹",
+        "Mg ha⁻¹ year⁻¹", "Mg ha⁻¹ year⁻¹",
+    ],
+)
+```
+
 ### Table 2: Species Life History Attributes
 
 The following table reproduces Table 2 from Scheller and Mladenoff (2004),
