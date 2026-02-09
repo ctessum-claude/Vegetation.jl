@@ -76,7 +76,7 @@ DataFrame(
         "Maximum ANPP for species",
         "Actual ANPP for species, age cohort",
         "Actual biomass for species, age cohort",
-        "Ratio of actual to maximum biomass for species, age cohort",
+        "Ratio of actual to potential biomass for species, age cohort",
         "Maximum possible biomass for species",
         "Potential biomass — the limit to biomass based on growing space available",
         "Ratio of potential to maximum biomass for species, age cohort",
@@ -136,22 +136,38 @@ logistically.
 
 ```@example landis
 using Plots
+using OrdinaryDiffEqDefault
 
-B_AP_range = 0.0:0.01:1.0
+compiled = mtkcompile(LANDISBiomass())
 
-# Eq. 4: ANPP fraction = e * B_AP * exp(-B_AP) (with B_PM = 1)
-anpp_frac = [exp(1) * x * exp(-x) for x in B_AP_range]
+yr_to_s = 3.15576e7
+Mg_ha_to_kg_m2 = 0.1
 
-# Eq. 5: Mortality fraction (r=0.08, y0=0.01)
-r, y0 = 0.08, 0.01
-mort_frac = [y0 / (y0 + (1 - y0) * exp(-r / y0 * x)) for x in B_AP_range]
+# Sweep B values to vary B_AP from ~0 to ~1
+# B_MAX = ANPP_MAX * 30 yr = 7.45 * 0.1 / yr_to_s * 30 * yr_to_s = 22.35 kg/m²
+B_MAX_val = 7.45 * Mg_ha_to_kg_m2 / yr_to_s * 30.0 * yr_to_s
+ANPP_MAX_val = 7.45 * Mg_ha_to_kg_m2 / yr_to_s
 
-p = plot(B_AP_range, anpp_frac, label = "ANPP", linewidth = 2,
+B_AP_vals = Float64[]
+anpp_frac = Float64[]
+mort_frac = Float64[]
+for frac in 0.01:0.01:1.0
+    B_val = frac * B_MAX_val
+    prob = ODEProblem(compiled,
+        Dict(compiled.B => B_val, compiled.D_wood => 0.0),
+        (0.0, 1.0))
+    sol = solve(prob)
+    push!(B_AP_vals, sol[compiled.B_AP][1])
+    push!(anpp_frac, sol[compiled.ANPP_ACT][1] / ANPP_MAX_val)
+    push!(mort_frac, sol[compiled.M_BIO][1] / ANPP_MAX_val)
+end
+
+p = plot(B_AP_vals, anpp_frac, label = "ANPP", linewidth = 2,
     xlabel = "B_AP (Actual biomass / Potential biomass)",
     ylabel = "Fraction ANPP_MAX",
     title = "Fig. 3a: Growth and Mortality vs. B_AP",
     legend = :right, ylim = (0, 1.05))
-plot!(p, B_AP_range, mort_frac, label = "Mortality", linewidth = 2, linestyle = :dash)
+plot!(p, B_AP_vals, mort_frac, label = "Mortality", linewidth = 2, linestyle = :dash)
 p
 ```
 
@@ -163,13 +179,26 @@ lifespan. With the default shape parameter d = 10, mortality begins to increase
 noticeably around 50% of lifespan and reaches 100% at the maximum lifespan.
 
 ```@example landis
-age_frac_range = 0.0:0.01:1.0
-d = 10.0
+# Sweep age_init to vary age fraction from 0 to 1
+B_ref = 10.0 * Mg_ha_to_kg_m2  # Reference biomass for computing M_AGE fraction
+max_age_val = 400.0 * yr_to_s
 
-# Eq. 6: M_AGE fraction = exp(age_frac * d) / exp(d)
-age_mort_frac = [exp(x * d) / exp(d) for x in age_frac_range]
+age_frac_vals = Float64[]
+age_mort_frac = Float64[]
+for frac in 0.0:0.01:1.0
+    age_val = frac * max_age_val
+    prob = ODEProblem(compiled,
+        Dict(compiled.B => B_ref, compiled.D_wood => 0.0,
+            compiled.age_init => age_val),
+        (0.0, 1.0))
+    sol = solve(prob)
+    # M_AGE fraction = M_AGE / (B / one_yr) where one_yr = yr_to_s
+    m_age = sol[compiled.M_AGE][1]
+    push!(age_frac_vals, frac)
+    push!(age_mort_frac, m_age / (B_ref / yr_to_s))
+end
 
-p = plot(age_frac_range, age_mort_frac, linewidth = 2, label = nothing,
+p = plot(age_frac_vals, age_mort_frac, linewidth = 2, label = nothing,
     xlabel = "Fraction of species' lifespan",
     ylabel = "Fraction of biomass removed",
     title = "Fig. 3b: Age-Related Mortality",
@@ -188,13 +217,6 @@ until around year 50, after which dead biomass remains roughly constant near
 25 Mg/ha.
 
 ```@example landis
-using OrdinaryDiffEqDefault
-
-compiled = mtkcompile(LANDISBiomass())
-
-yr_to_s = 3.15576e7
-Mg_ha_to_kg_m2 = 0.1
-
 tspan_s = 200.0 * yr_to_s
 prob = ODEProblem(compiled, [], (0.0, tspan_s))
 sol = solve(prob)

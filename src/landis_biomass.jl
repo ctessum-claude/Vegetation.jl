@@ -37,7 +37,6 @@ $(SIGNATURES)
         e1 = exp(1), [description = "Euler's number (dimensionless)"]
         # 30 years in seconds: ratio of B_MAX to ANPP_MAX (Eq. 2)
         B_MAX_ratio = 30.0 * 3.15576e7, [description = "Ratio of maximum biomass to maximum ANPP (Eq. 2)", unit = u"s"]
-        one_kg_m2 = 1.0, [description = "Unit biomass for non-dimensionalization", unit = u"kg/m^2"]
         # 1 year in seconds: for converting per-year rates to per-second
         one_yr = 3.15576e7, [description = "One year in seconds for rate conversion", unit = u"s"]
     end
