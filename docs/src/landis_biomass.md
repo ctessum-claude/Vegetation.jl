@@ -180,6 +180,114 @@ plot!(p, years, D_vals, label = "Dead biomass (D)", linewidth = 2, linestyle = :
 p
 ```
 
+### Fig. 6b: P. tremuloides Single-Species Growth
+
+This figure reproduces Fig. 6b from the paper, showing the growth trajectory of
+a single *Populus tremuloides* (aspen) cohort. Because aspen is a shade-intolerant
+species with a short lifespan (120 years), its biomass exhibits cyclical
+behavior: it rises rapidly, then declines due to age-related mortality. The
+paper reports that aboveground living biomass of *P. tremuloides* ranges from
+approximately 94 to 124 Mg/ha, with empirical measurements indicating a range
+of 95--125 Mg/ha for mature aspen stands.
+
+```@example landis
+# P. tremuloides parameters from Table 2
+prob_poptre = ODEProblem(
+    compiled,
+    Dict(
+        compiled.B => 5.0 * Mg_ha_to_kg_m2, compiled.D_wood => 0.0,
+        compiled.max_age => 120.0 * yr_to_s,
+        compiled.ANPP_MAX => 7.46 * Mg_ha_to_kg_m2 / yr_to_s
+    ),
+    (0.0, tspan_s)
+)
+sol_poptre = solve(prob_poptre)
+
+B_poptre = [sol_poptre(yr * yr_to_s; idxs = compiled.B) / Mg_ha_to_kg_m2 for yr in years]
+D_poptre = [sol_poptre(yr * yr_to_s; idxs = compiled.D_wood) / Mg_ha_to_kg_m2 for yr in years]
+
+p = plot(years, B_poptre, label = "P. tremuloides", linewidth = 2,
+    xlabel = "Simulation year",
+    ylabel = "Biomass (Mg ha⁻¹)",
+    title = "Fig. 6b: Single Species Growth (P. tremuloides)",
+    legend = :right, ylim = (0, 200))
+plot!(p, years, D_poptre, label = "Dead biomass (D)", linewidth = 2, linestyle = :dash)
+p
+```
+
+### Fig. 6c: Multi-Species Competition
+
+This figure reproduces Fig. 6c from the paper, showing a site initialized with
+two mature mid-tolerant species (*Pinus strobus* and *Betula alleghaniensis*)
+and two young shade-tolerant species (*Acer saccharum* and *Tsuga canadensis*).
+In the paper, the shade-tolerant species eventually overtake as the mature
+cohorts senesce. Here, each species is simulated independently with its
+respective parameters from Table 2 to illustrate their individual growth
+trajectories. Note: true multi-cohort competition with dynamic `B_other` would
+require coupling multiple `LANDISBiomass` systems.
+
+```@example landis
+# Species parameters from Table 2
+# P. strobus: Longevity=450, ANPP_MAX=10.19, mature (age_init=200 yr)
+prob_pinstro = ODEProblem(
+    compiled,
+    Dict(
+        compiled.B => 50.0 * Mg_ha_to_kg_m2, compiled.D_wood => 0.0,
+        compiled.max_age => 450.0 * yr_to_s,
+        compiled.ANPP_MAX => 10.19 * Mg_ha_to_kg_m2 / yr_to_s,
+        compiled.age_init => 200.0 * yr_to_s
+    ),
+    (0.0, tspan_s)
+)
+sol_pinstro = solve(prob_pinstro)
+
+# B. alleghaniensis: Longevity=350, ANPP_MAX=7.64, mature (age_init=200 yr)
+prob_betall = ODEProblem(
+    compiled,
+    Dict(
+        compiled.B => 50.0 * Mg_ha_to_kg_m2, compiled.D_wood => 0.0,
+        compiled.max_age => 350.0 * yr_to_s,
+        compiled.ANPP_MAX => 7.64 * Mg_ha_to_kg_m2 / yr_to_s,
+        compiled.age_init => 200.0 * yr_to_s
+    ),
+    (0.0, tspan_s)
+)
+sol_betall = solve(prob_betall)
+
+# A. saccharum: Longevity=400, ANPP_MAX=7.45, young (age_init=10 yr, default)
+prob_acesac = ODEProblem(compiled, [], (0.0, tspan_s))
+sol_acesac = solve(prob_acesac)
+
+# T. canadensis: Longevity=640, ANPP_MAX=6.27, young (age_init=10 yr)
+prob_tsuga = ODEProblem(
+    compiled,
+    Dict(
+        compiled.B => 5.0 * Mg_ha_to_kg_m2, compiled.D_wood => 0.0,
+        compiled.max_age => 640.0 * yr_to_s,
+        compiled.ANPP_MAX => 6.27 * Mg_ha_to_kg_m2 / yr_to_s
+    ),
+    (0.0, tspan_s)
+)
+sol_tsuga = solve(prob_tsuga)
+
+B_pinstro = [sol_pinstro(yr * yr_to_s; idxs = compiled.B) / Mg_ha_to_kg_m2 for yr in years]
+B_betall = [sol_betall(yr * yr_to_s; idxs = compiled.B) / Mg_ha_to_kg_m2 for yr in years]
+B_acesac = [sol_acesac(yr * yr_to_s; idxs = compiled.B) / Mg_ha_to_kg_m2 for yr in years]
+B_tsuga = [sol_tsuga(yr * yr_to_s; idxs = compiled.B) / Mg_ha_to_kg_m2 for yr in years]
+D_total = [sol_acesac(yr * yr_to_s; idxs = compiled.D_wood) / Mg_ha_to_kg_m2 for yr in years]
+
+p = plot(years, B_pinstro, label = "P. strobus", linewidth = 2,
+    xlabel = "Simulation year",
+    ylabel = "Biomass (Mg ha⁻¹)",
+    title = "Fig. 6c: Multi-Species Growth",
+    legend = :right, ylim = (0, 350))
+plot!(p, years, B_betall, label = "B. alleghaniensis", linewidth = 2, linestyle = :dash)
+plot!(p, years, B_acesac, label = "A. saccharum", linewidth = 2, linestyle = :dot)
+plot!(p, years, B_tsuga, label = "T. canadensis", linewidth = 2, linestyle = :dashdot)
+plot!(p, years, D_total, label = "Dead biomass (D)", linewidth = 2, color = :black, linestyle = :dash)
+p
+```
+
 ### Species Comparison: Short-Lived vs. Long-Lived Species
 
 This analysis compares the growth trajectories of two contrasting species: a

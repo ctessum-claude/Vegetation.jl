@@ -320,3 +320,85 @@ end
 
     @test B_short_100 < B_long_100
 end
+
+@testitem "LANDISBiomass: Fig. 6b - P. tremuloides Cyclical Biomass" setup = [LANDISSetup] tags = [:landis] begin
+    sys = LANDISBiomass()
+    compiled = mtkcompile(sys)
+
+    tspan_s = 200.0 * yr_to_s
+
+    # P. tremuloides parameters from Table 2
+    prob = ODEProblem(
+        compiled,
+        Dict(
+            compiled.B => 5.0 * Mg_ha_to_kg_m2, compiled.D_wood => 0.0,
+            compiled.max_age => 120.0 * yr_to_s,
+            compiled.ANPP_MAX => 7.46 * Mg_ha_to_kg_m2 / yr_to_s
+        ),
+        (0.0, tspan_s)
+    )
+    sol = solve(prob)
+    @test sol.retcode == SciMLBase.ReturnCode.Success
+
+    # Paper reports P. tremuloides biomass ranges ~94-124 Mg/ha
+    B_vals = [sol(yr * yr_to_s; idxs = compiled.B) / Mg_ha_to_kg_m2 for yr in 10:10:200]
+    peak_B = maximum(B_vals)
+    @test 80.0 < peak_B < 160.0  # Peak should be in reasonable range
+
+    # Biomass should decline after the species reaches its max_age
+    # At 120+ years, age-related mortality should cause decline
+    B_100 = sol(100.0 * yr_to_s; idxs = compiled.B) / Mg_ha_to_kg_m2
+    B_150 = sol(150.0 * yr_to_s; idxs = compiled.B) / Mg_ha_to_kg_m2
+    @test B_150 < B_100  # Biomass declines past max_age
+end
+
+@testitem "LANDISBiomass: Fig. 6c - Multi-Species Relative Growth" setup = [LANDISSetup] tags = [:landis] begin
+    sys = LANDISBiomass()
+    compiled = mtkcompile(sys)
+
+    tspan_s = 200.0 * yr_to_s
+
+    # Mature P. strobus (age_init=200 yr, Longevity=450, ANPP_MAX=10.19)
+    prob_pinstro = ODEProblem(
+        compiled,
+        Dict(
+            compiled.B => 50.0 * Mg_ha_to_kg_m2, compiled.D_wood => 0.0,
+            compiled.max_age => 450.0 * yr_to_s,
+            compiled.ANPP_MAX => 10.19 * Mg_ha_to_kg_m2 / yr_to_s,
+            compiled.age_init => 200.0 * yr_to_s
+        ),
+        (0.0, tspan_s)
+    )
+    sol_pinstro = solve(prob_pinstro)
+
+    # Young A. saccharum (age_init=10 yr, default)
+    prob_acesac = ODEProblem(compiled, [], (0.0, tspan_s))
+    sol_acesac = solve(prob_acesac)
+
+    # Young T. canadensis (age_init=10 yr, Longevity=640, ANPP_MAX=6.27)
+    prob_tsuga = ODEProblem(
+        compiled,
+        Dict(
+            compiled.B => 5.0 * Mg_ha_to_kg_m2, compiled.D_wood => 0.0,
+            compiled.max_age => 640.0 * yr_to_s,
+            compiled.ANPP_MAX => 6.27 * Mg_ha_to_kg_m2 / yr_to_s
+        ),
+        (0.0, tspan_s)
+    )
+    sol_tsuga = solve(prob_tsuga)
+
+    @test sol_pinstro.retcode == SciMLBase.ReturnCode.Success
+    @test sol_acesac.retcode == SciMLBase.ReturnCode.Success
+    @test sol_tsuga.retcode == SciMLBase.ReturnCode.Success
+
+    # A. saccharum has higher ANPP_MAX so it should grow faster initially
+    B_acesac_50 = sol_acesac(50.0 * yr_to_s; idxs = compiled.B) / Mg_ha_to_kg_m2
+    B_tsuga_50 = sol_tsuga(50.0 * yr_to_s; idxs = compiled.B) / Mg_ha_to_kg_m2
+    @test B_acesac_50 > B_tsuga_50  # Higher ANPP gives faster early growth
+
+    # P. strobus starts mature but should eventually decline due to age
+    # (age at end = 200+200 = 400 yr, longevity = 450)
+    B_pinstro_50 = sol_pinstro(50.0 * yr_to_s; idxs = compiled.B) / Mg_ha_to_kg_m2
+    B_pinstro_200 = sol_pinstro(200.0 * yr_to_s; idxs = compiled.B) / Mg_ha_to_kg_m2
+    @test B_pinstro_200 < B_pinstro_50  # Mature species declines over time
+end
