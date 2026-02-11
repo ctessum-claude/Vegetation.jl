@@ -165,8 +165,10 @@ end
     # At age = 0.5 * max_age (200 years): M_AGE fraction ≈ exp(-d/2) ≈ 0.00674
     prob_half = ODEProblem(
         compiled,
-        Dict(compiled.B => B_init, compiled.D_wood => 0.0,
-            compiled.age_init => 200.0 * yr_to_s),
+        Dict(
+            compiled.B => B_init, compiled.D_wood => 0.0,
+            compiled.age_init => 200.0 * yr_to_s
+        ),
         (0.0, 1.0)
     )
     sol_half = solve(prob_half)
@@ -178,8 +180,10 @@ end
     # At age = 0.8 * max_age (320 years): fraction ≈ 0.135 (Fig. 3b)
     prob_80 = ODEProblem(
         compiled,
-        Dict(compiled.B => B_init, compiled.D_wood => 0.0,
-            compiled.age_init => 320.0 * yr_to_s),
+        Dict(
+            compiled.B => B_init, compiled.D_wood => 0.0,
+            compiled.age_init => 320.0 * yr_to_s
+        ),
         (0.0, 1.0)
     )
     sol_80 = solve(prob_80)
