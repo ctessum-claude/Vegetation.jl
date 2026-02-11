@@ -18,6 +18,9 @@ makedocs(;
         "Scheller & Mladenoff (2004)" => [
             "LANDIS Biomass Module" => "landis_biomass.md",
         ],
+        "Stage (1973)" => [
+            "Prognosis Model" => "stage_prognosis.md",
+        ],
         "API" => "api.md",
     ],
 )
