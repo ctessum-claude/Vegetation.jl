@@ -312,8 +312,8 @@ end
 
     # Verify exact computation against hand-calculated value
     # HCB = -29.26 + 0.61*60 + 9.178*ln(100) - 0.222*43 - 5.80*(6/7) + 0.0
-    expected_hcb_ft = -29.26 + 0.61 * 60 + 9.178 * log(100) - 0.222 * 43 - 5.80 * (6 / 7) + 0.0
-    @test hcb_ft ≈ expected_hcb_ft rtol = 1e-4
+    expected_hcb_ft = -29.26 + 0.61 * 60 + 9.178 * log(100) - 0.222 * 43 - 5.8 * (6 / 7) + 0.0
+    @test hcb_ft ≈ expected_hcb_ft rtol = 1.0e-4
 end
 
 @testitem "Figure 1B Numerical Verification" setup = [StagePrognosisSetup] tags = [:stage_prognosis] begin
@@ -328,12 +328,14 @@ end
     ht0 = 67.0 * one_foot
     hcb0 = ht0 * (1.0 - cr0)
 
-    prob = SDEProblem(compiled_sys, [
+    prob = SDEProblem(
+        compiled_sys, [
             compiled_sys.Dsq => (6.8 * one_inch)^2,
             compiled_sys.HT => ht0,
             compiled_sys.HCB => hcb0,
             compiled_sys.N_trees => 509.0 / 4046.86,
-        ], (0.0, 51.0 * one_year))
+        ], (0.0, 51.0 * one_year)
+    )
     prob_det = remake(prob; p = [compiled_sys.σ_growth => 0.0, compiled_sys.PCT => 50.0])
     sol = solve(prob_det, EM(), dt = one_year / 10)
 
