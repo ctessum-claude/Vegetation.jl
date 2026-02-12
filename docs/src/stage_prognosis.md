@@ -265,6 +265,44 @@ end
 p
 ```
 
+### Endemic Mortality Rate (Stage 1973, p. 16-17)
+
+The endemic mortality model is based on Lee (1971) yield tables for lodgepole pine
+in Alberta. Annual mortality rates depend on mean stand DBH, declining with increasing
+mean DBH to a minimum at 10.6 inches and then increasing. Within the stand, mortality
+is distributed by the percentile factor [0.25 + 1.5·(1 - PCT/100)], giving the lowest
+rate to the largest tree (PCT = 100) and the highest to the smallest (PCT = 0).
+
+```@example stage_prognosis
+# Mortality rate as a function of mean stand DBH
+dbh_range = 4.0:0.1:16.0  # inches
+
+mort_a0 = 0.0536
+mort_a1 = -0.0088
+mort_a2 = 0.000415
+
+base_rate = [mort_a0 + mort_a1 * d + mort_a2 * d^2 for d in dbh_range]
+
+p1 = plot(collect(dbh_range), base_rate .* 100,
+    xlabel="Mean Stand DBH (inches)", ylabel="Annual Mortality Rate (%)",
+    title="Base Mortality Rate (Lee 1971)",
+    legend=false, linewidth=2)
+vline!(p1, [10.6], linestyle=:dash, color=:gray, label="")
+
+# Percentile adjustment factor
+pct_range = 0.0:1.0:100.0
+pct_factor = [0.25 + 1.5 * (1.0 - p / 100.0) for p in pct_range]
+
+p2 = plot(collect(pct_range), pct_factor,
+    xlabel="Percentile in Basal Area Distribution",
+    ylabel="Mortality Factor",
+    title="Percentile Adjustment (Stage 1973, p. 17)",
+    legend=false, linewidth=2)
+
+p = plot(p1, p2, layout=(1, 2), size=(900, 400))
+p
+```
+
 ### Limitations
 
 1. **Height increment coefficients**: The specific regression coefficients for the

@@ -38,8 +38,40 @@ $(SIGNATURES)
         hundred_feet = 30.48, [description = "Reference length: 100 feet", unit = u"m"]
         one_inch_sq = 0.0254^2, [description = "Reference area: 1 square inch", unit = u"m^2"]
         one_year = 3.15576e7, [description = "Reference time: 1 year", unit = u"s"]
-        # 1 acre = 4046.86 m², so trees/acre * (1 acre / 4046.86 m²) = trees/m²
         one_acre = 4046.86, [description = "Reference area: 1 acre", unit = u"m^2"]
+    end
+
+    # ===== Diameter growth regression constants (Stage 1973, p. 15) =====
+    # DDS = BKR * FINT * exp(b0 + b1*ln(SI) + b2*EL + b3*ln(CCF) + b4*ln(CR) + b5*ln(DBH) + b6*PCT)
+    # Regression fitted on ln(DDS) in imperial units (in²/yr);
+    # all predictor variables are non-dimensionalized by reference values, so
+    # these coefficients are dimensionless.
+    @constants begin
+        b_DDS_0 = -1.66955, [description = "DDS regression intercept (dimensionless)"]
+        b_DDS_SI = 0.4143, [description = "DDS coefficient on ln(SI in feet) (dimensionless)"]
+        b_DDS_EL = -0.004388, [description = "DDS coefficient on EL in hundreds of feet (dimensionless)"]
+        b_DDS_CCF = -0.3781, [description = "DDS coefficient on ln(CCF) (dimensionless)"]
+        b_DDS_CR = 0.4879, [description = "DDS coefficient on ln(CR) (dimensionless)"]
+        b_DDS_DBH = 0.9948, [description = "DDS coefficient on ln(DBH in inches) (dimensionless)"]
+        b_DDS_PCT = 0.006141, [description = "DDS coefficient on PCT (dimensionless)"]
+    end
+
+    # ===== Crown recession constants (Stage 1973, p. 16) =====
+    @constants begin
+        crown_recess_low = 0.2, [description = "Crown recession fraction when CCF < 125 (dimensionless)"]
+        crown_recess_high = 0.61, [description = "Crown recession fraction when CCF >= 125 (dimensionless)"]
+        CCF_threshold = 125.0, [description = "CCF threshold for crown recession rate (dimensionless)"]
+    end
+
+    # ===== Endemic mortality constants (Lee 1971, via Stage 1973, p. 16-17) =====
+    # Base annual mortality rate as function of mean stand DBH (in inches):
+    #   rate_per_year = mort_a0 + mort_a1 * DBH_mean_in + mort_a2 * DBH_mean_in²
+    # Minimum at DBH = 10.6 inches (0.269 m). All inputs are non-dimensionalized,
+    # so these coefficients are dimensionless annual rates.
+    @constants begin
+        mort_a0 = 0.0536, [description = "Mortality intercept, annual rate (dimensionless)"]
+        mort_a1 = -0.0088, [description = "Mortality linear coeff on DBH in inches (dimensionless)"]
+        mort_a2 = 0.000415, [description = "Mortality quadratic coeff on DBH² in inches² (dimensionless)"]
     end
 
     # ===== Parameters =====
@@ -56,11 +88,6 @@ $(SIGNATURES)
         # Tree parameters
         BKR = 1.0, [description = "Bark ratio (dob/dib)² (dimensionless)"]
 
-        # Habitat type parameter for HCB equation
-        HAB = 0.0, [description = "Habitat type adjustment for HCB (dimensionless, in feet-space)"]
-        # HAB values: 0.0 for Abies/Xerophyllum, -4.24 for Abies/Vaccinium,
-        #            -3.86 for Abies/Pachistima, -5.47 for Pseudotsuga/Calamagrostis
-
         # Height increment coefficients (species-specific, lodgepole pine estimates)
         # From Cole and Stage (in preparation), referenced in Stage (1973).
         # These defaults are calibrated to reproduce ~0.65 ft/yr height growth
@@ -70,21 +97,15 @@ $(SIGNATURES)
         c3_ht = -0.1, [description = "Height increment coefficient on ln(DBH) (dimensionless)"]
         c4_ht = 0.2, [description = "Height increment coefficient on ln(HT) (dimensionless)"]
 
-        # Endemic mortality parameters
-        # Approximation of Lee (1971) mortality curve for lodgepole pine
-        # Base annual mortality rate as function of mean DBH (in inches):
-        #   rate = mort_a0 + mort_a1*DBH_mean_in + mort_a2*DBH_mean_in²
-        # Minimum at DBH = 10.6 inches (0.269 m)
-        mort_a0 = 0.0536, [description = "Mortality intercept coefficient (dimensionless)"]
-        mort_a1 = -0.0088, [description = "Mortality linear coefficient (dimensionless)"]
-        mort_a2 = 0.000415, [description = "Mortality quadratic coefficient (dimensionless)"]
+        # Mortality parameters
         mean_DBH = 7.0 * 0.0254, [description = "Stand mean DBH for mortality calculation", unit = u"m"]
 
         # Stochastic parameters
-        # The paper specifies σ ≈ 0.3 in log-space per year. Since the time unit is
-        # seconds, we scale: σ_growth = σ_paper * sqrt(seconds_per_year)
-        # = 0.3 * sqrt(3.15576e7) ≈ 1685.4. This ensures the noise over one year
-        # gives the correct log-space standard deviation.
+        # The paper specifies σ ≈ 0.3 in log-space per year (Stage 1973, p. 12).
+        # In the SDE formulation D(Dsq) ~ drift + σ_growth * |drift| * B, the
+        # relative noise over one year has std dev = σ_growth / √(one_year).
+        # Setting σ_growth = 0.3 * √(one_year) gives the correct 0.3 relative
+        # std dev over one year.
         σ_growth = 0.3 * sqrt(3.15576e7), [description = "Scaled std dev of stochastic growth noise (dimensionless)"]
     end
 
@@ -124,19 +145,19 @@ $(SIGNATURES)
         mean_DBH_in ~ mean_DBH / one_inch,
 
         # --- Diameter Change Model (Stage 1973, p. 15) ---
-        # DDS = BKR * FINT * exp(-1.66955 + 0.4143*ln(SI) - 0.004388*EL
-        #        - 0.3781*ln(CCF) + 0.4879*ln(CR) + 0.9948*ln(DBH) + 0.006141*PCT)
+        # DDS = BKR * FINT * exp(b0 + b1*ln(SI) + b2*EL + b3*ln(CCF)
+        #        + b4*ln(CR) + b5*ln(DBH) + b6*PCT)
         # Original equation uses imperial units. We convert: DBH/one_inch gives
         # dimensionless value numerically equal to DBH in inches, etc.
         # DDS has units of in²/year, converted back to m²/s.
         DDS_rate ~ (BKR * one_inch_sq / one_year) * exp(
-            -1.66955
-                + 0.4143 * log(SI / one_foot)       # SI in feet
-                - 0.004388 * (EL / hundred_feet)     # EL in hundreds of feet
-                - 0.3781 * log(CCF)                  # CCF dimensionless
-                + 0.4879 * log(CR)                   # CR dimensionless
-                + 0.9948 * log(DBH / one_inch)       # DBH in inches
-                + 0.006141 * PCT                     # PCT dimensionless
+            b_DDS_0
+                + b_DDS_SI * log(SI / one_foot)       # SI in feet
+                + b_DDS_EL * (EL / hundred_feet)       # EL in hundreds of feet
+                + b_DDS_CCF * log(CCF)                 # CCF dimensionless
+                + b_DDS_CR * log(CR)                   # CR dimensionless
+                + b_DDS_DBH * log(DBH / one_inch)      # DBH in inches
+                + b_DDS_PCT * PCT                      # PCT dimensionless
         ),  # Eq. 1 - Basal area increment rate
 
         # --- Diameter Growth Increment (Stage 1973, p. 15) ---
@@ -162,9 +183,9 @@ $(SIGNATURES)
         # If CCF < 125: rate = 1/5 * height growth rate
         # If CCF >= 125: rate = 0.61 * height growth rate
         crown_recession_rate ~ ifelse(
-            CCF < 125.0,
-            0.2 * HTGF_rate,    # 1/5 of height growth
-            0.61 * HTGF_rate    # 0.61 of height growth
+            CCF < CCF_threshold,
+            crown_recess_low * HTGF_rate,    # 1/5 of height growth
+            crown_recess_high * HTGF_rate    # 0.61 of height growth
         ),  # Eq. 3 - Crown recession
 
         # --- Endemic Mortality Model (Stage 1973, p. 16-17) ---
@@ -220,10 +241,22 @@ USDA Forest Service Research Paper INT-137, p. 16.
 $(SIGNATURES)
 """
 @component function StagePrognosisHCB(; name = :StagePrognosisHCB)
+    # ===== Unit conversion constants =====
     @constants begin
         one_inch = 0.0254, [description = "Reference length: 1 inch", unit = u"m"]
         one_foot = 0.3048, [description = "Reference length: 1 foot", unit = u"m"]
         hundred_feet = 30.48, [description = "Reference length: 100 feet", unit = u"m"]
+    end
+
+    # ===== HCB regression constants (Stage 1973, p. 16) =====
+    # HCB = b0 + b1*HT + b2*ln(CCF) + b3*EL + b4*DBH/RMSQD + HAB
+    # All in feet-space; result converted to meters.
+    @constants begin
+        b_HCB_0 = -29.26, [description = "HCB regression intercept in feet (dimensionless)"]
+        b_HCB_HT = 0.61, [description = "HCB coefficient on height in feet (dimensionless)"]
+        b_HCB_CCF = 9.178, [description = "HCB coefficient on ln(CCF) (dimensionless)"]
+        b_HCB_EL = -0.222, [description = "HCB coefficient on elevation in hundreds of feet (dimensionless)"]
+        b_HCB_DBH_RMSQD = -5.8, [description = "HCB coefficient on DBH/RMSQD ratio (dimensionless)"]
     end
 
     @parameters begin
@@ -245,11 +278,11 @@ $(SIGNATURES)
     # All terms in feet-space; convert result to meters
     eqs = [
         HCB_pred ~ one_foot * (
-            -29.26
-                + 0.61 * (HT_input / one_foot)
-                + 9.178 * log(CCF)
-                - 0.222 * (EL / hundred_feet)
-                - 5.8 * (DBH_input / one_inch) / (RMSQD / one_inch)
+            b_HCB_0
+                + b_HCB_HT * (HT_input / one_foot)
+                + b_HCB_CCF * log(CCF)
+                + b_HCB_EL * (EL / hundred_feet)
+                + b_HCB_DBH_RMSQD * (DBH_input / one_inch) / (RMSQD / one_inch)
                 + HAB
         ),  # HCB prediction (Stage 1973, p. 16)
     ]
