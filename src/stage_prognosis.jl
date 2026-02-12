@@ -74,6 +74,19 @@ $(SIGNATURES)
         mort_a2 = 0.000415, [description = "Mortality quadratic coeff on DBH² in inches² (dimensionless)"]
     end
 
+    # ===== Literal constants used in equations =====
+    @constants begin
+        CR_min = 0.01, [description = "Minimum crown ratio floor (dimensionless)"]
+        DG_min = 0.001, [description = "Minimum diameter growth increment floor (dimensionless)"]
+        DG_offset = 0.05, [description = "Offset for DG in height growth log transform (dimensionless)"]
+        zero_rate = 0.0, [unit = u"s^-1", description = "Zero rate for mortality floor"]
+        one_rate_per_year = 1.0 / 3.15576e7, [unit = u"s^-1", description = "Unit annual rate converted to per-second"]
+        mort_base_factor = 0.25, [description = "Base mortality distribution factor (dimensionless)"]
+        mort_scale_factor = 1.5, [description = "Mortality distribution scale factor (dimensionless)"]
+        mort_pct_one = 1.0, [description = "Unity constant for PCT normalization (dimensionless)"]
+        mort_pct_max = 100.0, [description = "Maximum percentile value (dimensionless)"]
+    end
+
     # ===== Parameters =====
     @parameters begin
         # Site parameters
@@ -139,7 +152,7 @@ $(SIGNATURES)
         DBH ~ sqrt(Dsq),  # Auxiliary
 
         # Crown ratio from height and crown base height
-        CR ~ max(0.01, (HT - HCB) / HT),  # Auxiliary, bounded away from zero
+        CR ~ max(CR_min, (HT - HCB) / HT),  # Auxiliary, bounded away from zero
 
         # Mean DBH in inches (dimensionless) for mortality calculation
         mean_DBH_in ~ mean_DBH / one_inch,
@@ -165,7 +178,7 @@ $(SIGNATURES)
         # DDS_rate has units m²/s, multiply by one_year to get m²/yr,
         # then divide by one_inch_sq to get in²/yr (dimensionless).
         # DBH/one_inch gives DBH in inches (dimensionless).
-        DG ~ max(0.001, sqrt((DBH / one_inch)^2 + DDS_rate * one_year / one_inch_sq) - DBH / one_inch),
+        DG ~ max(DG_min, sqrt((DBH / one_inch)^2 + DDS_rate * one_year / one_inch_sq) - DBH / one_inch),
 
         # --- Height Increment Model (Stage 1973, p. 15-16) ---
         # ln(HTGF) = c1 + c2*ln(DG+0.05) + c3*ln(DBH) + c4*ln(HT)
@@ -173,7 +186,7 @@ $(SIGNATURES)
         # HTGF is periodic height growth in feet/year, converted to m/s
         HTGF_rate ~ (one_foot / one_year) * exp(
             c1_ht
-                + c2_ht * log(DG + 0.05)              # DG in inches (dimensionless)
+                + c2_ht * log(DG + DG_offset)          # DG in inches (dimensionless)
                 + c3_ht * log(DBH / one_inch)          # DBH in inches
                 + c4_ht * log(HT / one_foot)           # HT in feet
         ),  # Eq. 2 - Height growth rate
@@ -191,10 +204,11 @@ $(SIGNATURES)
         # --- Endemic Mortality Model (Stage 1973, p. 16-17) ---
         # Based on Lee (1971): rates depend on mean DBH with minimum at 10.6 inches
         # Factor distributes mortality by percentile: [0.25 + 1.5*(1 - PCT/100)]
-        mortality_rate ~ (1.0 / one_year) * max(
-            0.0,
-            (mort_a0 + mort_a1 * mean_DBH_in + mort_a2 * mean_DBH_in * mean_DBH_in)
-                * (0.25 + 1.5 * (1.0 - PCT / 100.0))
+        mortality_rate ~ max(
+            zero_rate,
+            one_rate_per_year
+                * (mort_a0 + mort_a1 * mean_DBH_in + mort_a2 * mean_DBH_in * mean_DBH_in)
+                * (mort_base_factor + mort_scale_factor * (mort_pct_one - PCT / mort_pct_max))
         ),  # Eq. 4 - Mortality rate
 
         # ===== Differential Equations =====

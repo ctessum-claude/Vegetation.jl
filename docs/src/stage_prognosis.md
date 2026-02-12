@@ -38,6 +38,19 @@ The key innovation is that diameter growth is modeled in diameter-squared space
 This is implemented as a stochastic differential equation (SDE) using
 ModelingToolkit's `@brownians` macro.
 
+### Predictor Variables (Stage 1973, p. 15)
+
+The following table summarizes the tree growth components, their predictor variables,
+and data sources as described in Stage (1973):
+
+| Tree growth component | Predictor variables | Data source |
+|---|---|---|
+| Annual basal area increment (b.a.i.) | D.b.h., relative stand density, site, elevation, habitat type, percentile in basal area distribution, crown ratio | Increment cores, remeasured plots |
+| Height increment | Radial increment, habitat type, d.b.h., height | Stem analyses |
+| Crown dimensions | Relative density, percentile in basal area distribution, d.b.h. | Temporary plots |
+| Bark ratio | Same as b.a.i. | Temporary plots or tree samples |
+| Mortality rates | Same as b.a.i. and radial increment plus pest population models where applicable | Remeasured plots, "last *n* years mortality", "years since death" |
+
 ### Component Equations
 
 The model implements the following equations from Stage (1973):
