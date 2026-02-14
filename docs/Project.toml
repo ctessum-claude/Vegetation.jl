@@ -7,7 +7,6 @@ OrdinaryDiffEqDefault = "50262376-6c5a-4cf5-baba-aaf4f84d72d7"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
-Vegetation = "b8531ea1-2e78-4866-9831-a39316ef1066"
 
 [compat]
 DataFrames = "1"
