@@ -13,7 +13,7 @@ StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
 [compat]
 DocStringExtensions = "0.9"
 DynamicQuantities = "1"
-EarthSciMLBase = "0.24"
+EarthSciMLBase = "0.24, 0.25"
 ModelingToolkit = "10"
 NonlinearSolve = "4"
 OrdinaryDiffEqDefault = "1"
